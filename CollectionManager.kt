@@ -3,6 +3,7 @@ package cbl.js.kotiln
 import com.couchbase.lite.ConcurrencyControl
 import com.couchbase.lite.Document
 import com.couchbase.lite.Index
+import com.couchbase.lite.IndexConfiguration
 import com.couchbase.lite.MutableDocument
 import org.json.JSONException
 import java.text.SimpleDateFormat

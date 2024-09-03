@@ -86,6 +86,12 @@ object DatabaseManager {
         }
     }
 
+   fun deleteWithPath(
+     databaseName: String,
+     directoryPath: String) {
+      Database.delete(databaseName, File(directoryPath))
+    }
+
     fun deleteCollection(collectionName: String,
                          scopeName: String,
                          databaseName: String) {
