@@ -1,6 +1,5 @@
 package cbl.js.kotiln
 
-import com.couchbase.lite.ListenerToken
 import com.couchbase.lite.Replicator
 import com.couchbase.lite.ReplicatorConfiguration
 import com.couchbase.lite.ReplicatorStatus
@@ -8,8 +7,6 @@ import java.util.UUID
 
 object ReplicatorManager {
     private val replicators: MutableMap<String, Replicator> = mutableMapOf()
-    val replicatorChangeListeners: MutableMap<String, ListenerToken> = mutableMapOf()
-    val replicatorDocumentListners: MutableMap<String, ListenerToken> = mutableMapOf()
 
     fun cleanUp(replicatorId: String) {
         val replicator = replicators[replicatorId]
@@ -77,20 +74,6 @@ object ReplicatorManager {
             throw Exception("Collection not found")
         }
         return mutableSet
-    }
-
-    fun removeChangeListener(replicatorId: String, token: String) {
-        val replicator = replicators[replicatorId]
-        replicator?.let {
-            val listenerToken = replicatorChangeListeners[token]
-            listenerToken?.let {
-                listenerToken.remove()
-            }
-        }
-    }
-
-    fun removeReplicator(replicatorId: String) {
-        replicators.remove(replicatorId)
     }
 
     fun resetCheckpoint(replicatorId: String) {

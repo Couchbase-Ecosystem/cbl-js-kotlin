@@ -3,16 +3,12 @@ package cbl.js.kotiln
 import com.couchbase.lite.ConcurrencyControl
 import com.couchbase.lite.Document
 import com.couchbase.lite.Index
-import com.couchbase.lite.IndexConfiguration
 import com.couchbase.lite.MutableDocument
-import org.json.JSONException
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
 object CollectionManager {
-    private val defaultCollectionName: String = "_default"
-    private val defaultScopeName: String = "_default"
 
     @Throws(Exception::class)
     fun createIndex(indexName: String,

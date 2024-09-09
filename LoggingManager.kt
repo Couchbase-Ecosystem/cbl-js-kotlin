@@ -4,6 +4,7 @@ import com.couchbase.lite.*
 import java.util.EnumSet
 
 object LoggingManager {
+
     fun setLogLevel(logDomain: String, logLevel: Int) {
         when (logDomain) {
             "ALL" -> Database.log.console.domains = LogDomain.ALL_DOMAINS
@@ -16,7 +17,7 @@ object LoggingManager {
         Database.log.console.level = loggingValue
     }
 
-    fun getLogLevel(logLevelValue: Int): LogLevel {
+    private fun getLogLevel(logLevelValue: Int): LogLevel {
         when (logLevelValue) {
             0 -> return LogLevel.DEBUG
             1 -> return LogLevel.VERBOSE
