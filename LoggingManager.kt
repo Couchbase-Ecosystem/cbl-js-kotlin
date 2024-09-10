@@ -5,6 +5,23 @@ import java.util.EnumSet
 
 object LoggingManager {
 
+   fun setFileLoggingConfig(
+     directory: String,
+     logLevel: Int,
+     maxSize: Long,
+     maxRotateCount: Int,
+     shouldUsePlainText: Boolean,
+   ) {
+        val loggingValue = getLogLevel(logLevel)
+        val config = LogFileConfiguration(directory)
+        config.setMaxSize(maxSize)
+        config.setMaxRotateCount(maxRotateCount)
+        config.setUsePlaintext(shouldUsePlainText)
+        Database.log.file.config = config
+        Database.log.file.level = loggingValue
+   }
+
+
     fun setLogLevel(logDomain: String, logLevel: Int) {
         when (logDomain) {
             "ALL" -> Database.log.console.domains = LogDomain.ALL_DOMAINS
