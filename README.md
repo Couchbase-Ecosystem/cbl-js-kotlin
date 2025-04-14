@@ -3,7 +3,7 @@ Couchbase Lite Javascript Library implementation in Kotlin for Android
 
 ---
 
-# 📢 Support Policy
+## 📢 Support Policy
 
 We truly appreciate your interest in this project!  
 This project is **community-maintained**, which means it's **not officially supported** by our support team.
