@@ -169,14 +169,14 @@ object DatabaseManager {
     fun openDatabase(databaseName: String, config: JSONObject?, context: Context): String {
         synchronized(openDatabases) {
             val nanoId = generateNanoId()
-            val uniqueName = "${databaseName}_${nanoId}"
+            val databaseUniqueName = "${databaseName}_${nanoId}"
 
             val databaseConfig = buildDatabaseConfiguration(config, context)
             val newDatabase = Database(databaseName, databaseConfig)
 
             openDatabases[uniqueName] = newDatabase
 
-            return uniqueName
+            return databaseUniqueName
         }
     }
 
