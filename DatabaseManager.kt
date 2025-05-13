@@ -174,7 +174,7 @@ object DatabaseManager {
             val databaseConfig = buildDatabaseConfiguration(config, context)
             val newDatabase = Database(databaseName, databaseConfig)
 
-            openDatabases[uniqueName] = newDatabase
+            openDatabases[databaseUniqueName] = newDatabase
 
             return databaseUniqueName
         }
