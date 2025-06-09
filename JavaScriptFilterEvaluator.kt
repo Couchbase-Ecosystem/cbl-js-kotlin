@@ -3,131 +3,146 @@ package cbl.js.kotiln
 import android.util.Log
 import com.couchbase.lite.Document
 import com.couchbase.lite.DocumentFlag
+import com.eclipsesource.v8.V8
 import org.json.JSONObject
-import org.mozilla.javascript.Context
-import org.mozilla.javascript.Scriptable
 
 object JavaScriptFilterEvaluator {
     private const val TAG = "JSFilterEvaluator"
     
-    /**
-     * Evaluates a JavaScript filter function against a document and flags
-     */
-    fun evaluateFilter(filterFunction: String, document: Document, flags: Set<DocumentFlag>): Boolean {
-        var jsContext: Context? = null
-        try {
-            // Create JavaScript context
-            jsContext = Context.enter()
-            jsContext.optimizationLevel = -1 // Use interpreted mode for better compatibility
+    // Thread-local V8 instances for thread safety and performance
+    private val threadLocalV8 = ThreadLocal<V8Runtime>()
+    
+    private data class V8Runtime(
+        val v8: V8,
+        val compiledFunctions: MutableMap<String, String> = mutableMapOf()
+    )
+    
+    private fun getV8Runtime(): V8Runtime {
+        var runtime = threadLocalV8.get()
+        if (runtime == null || runtime.v8.isReleased) {
+            val v8 = V8.createV8Runtime()
             
-            // Create scope
-            val scope: Scriptable = jsContext.initStandardObjects()
+            // Add Android logging bridge
+            v8.registerJavaMethod({ _, parameters ->
+                val message = parameters?.let { params ->
+                    (0 until params.length()).map { i ->
+                        params[i]?.toString() ?: "null"
+                    }.joinToString(" ")
+                } ?: ""
+                Log.d("JSFilter", message)
+            }, "androidLog")
             
-            // Setup simple console logging
-            setupConsole(jsContext, scope)
-            
-            // Convert document to JSON
-            val docJson = documentToJson(document)
-            val flagsJson = flagsToJson(flags)
-            
-            // Escape JSON strings for JavaScript
-            val escapedDocJson = escapeJsonForJs(docJson)
-            val escapedFlagsJson = escapeJsonForJs(flagsJson)
-            
-            // Create the evaluation script
-            val script = """
-                (function() {
-                    try {
-                        var filterFunc = $filterFunction;
-                        var doc = JSON.parse('$escapedDocJson');
-                        var flags = JSON.parse('$escapedFlagsJson');
-                        
-                        // Call the filter function
-                        var result = filterFunc(doc, flags);
-                        
-                        return !!result;
-                    } catch (e) {
-                        console.log('Filter error: ' + e.toString());
-                        console.log('Stack: ' + (e.stack || 'No stack trace'));
-                        return false;
+            // Setup console that uses the bridge
+            val consoleScript = """
+                var console = {
+                    log: function() {
+                        var args = Array.prototype.slice.call(arguments);
+                        androidLog(args.join(' '));
                     }
-                })()
+                };
             """.trimIndent()
+            v8.executeScript(consoleScript)
             
-            // Execute the script
-            val result = jsContext.evaluateString(scope, script, "filterScript", 1, null)
-            
-
-
-            // Convert result to boolean
-            return result?.let { Context.toBoolean(it) } ?: false
-                        
-        } catch (e: Exception) {
-            Log.e(TAG, "Error evaluating filter: ${e.message}", e)
-            return false
-        } finally {
-            if (jsContext != null) {
-                Context.exit()
-            }
+            runtime = V8Runtime(v8)
+            threadLocalV8.set(runtime)
         }
+        return runtime
     }
     
     /**
-     * Setup console.log functionality for debugging
+     * Filter evaluation
      */
-    private fun setupConsole(context: Context, scope: Scriptable) {
-        val consoleScript = """
-            var console = {
-                log: function() {
-                    var message = Array.prototype.slice.call(arguments).join(' ');
-                    java.lang.System.out.println('JSFilter: ' + message);
-                }
-            };
-        """.trimIndent()
-        
-        try {
-            context.evaluateString(scope, consoleScript, "console", 1, null)
+    fun evaluateFilter(filterFunction: String, document: Document, flags: Set<DocumentFlag>): Boolean {
+        return try {
+            val runtime = getV8Runtime()
+            val v8 = runtime.v8
+            
+            val compiledFunction = getCompiledFunction(runtime, filterFunction)
+            
+            // Convert to JSON
+            val docJson = documentToJson(document)
+            val flagsJson = flagsToJson(flags)
+            
+            // Escape JSON for JavaScript
+            val escapedDocJson = escapeJsonForJs(docJson)
+            val escapedFlagsJson = escapeJsonForJs(flagsJson)
+            
+            // Execute with JSON parsing
+            val script = """
+                (function() {
+                    var doc = JSON.parse('$escapedDocJson');
+                    var flags = JSON.parse('$escapedFlagsJson');
+                    return ($compiledFunction)(doc, flags);
+                })()
+            """.trimIndent()
+            
+            val result = v8.executeScript(script)
+            when (result) {
+                is Boolean -> result
+                else -> false
+            }
         } catch (e: Exception) {
-            Log.w(TAG, "Could not setup console logging: ${e.message}")
+            Log.e(TAG, "Filter evaluation error: ${e.message}")
+            false
+        }
+    }
+    
+    private fun getCompiledFunction(runtime: V8Runtime, filterFunction: String): String {
+        return runtime.compiledFunctions.getOrPut(filterFunction) {
+            try {
+                val wrapped = """
+                    function(doc, flags) {
+                        try {
+                            var filterFunc = $filterFunction;
+                            return !!filterFunc(doc, flags);
+                        } catch (e) {
+                            console.log('Filter error: ' + e.toString());
+                            return false;
+                        }
+                    }
+                """.trimIndent()
+                
+                // Validate compilation
+                runtime.v8.executeScript("($wrapped)")
+                wrapped
+            } catch (e: Exception) {
+                Log.e(TAG, "Function compilation failed: ${e.message}")
+                "function(doc, flags) { return false; }"
+            }
         }
     }
     
     /**
      * Convert document to JSON string
      */
-   private fun documentToJson(document: Document): String {
-    return try {
-        val map = document.toMap()
-
-        // Add document ID if not present
-        if (!docData.has("_id")) {
-            docData.put("_id", document.id)
+    private fun documentToJson(document: Document): String {
+        return try {
+            val docMap = document.toMap().toMutableMap()
+            docMap["_id"] = document.id
+            JSONObject(docMap).toString()
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to serialize document: ${e.message}")
+            "{\"_id\":\"${document.id}\"}"
         }
-            
-        JSONObject(map).toString()
-    } catch (e: Exception) {
-        Log.e(TAG, "Failed to serialize document: ${e.message}")
-        "{\"_id\":\"${document.id}\"}"
     }
-}
     
     /**
      * Convert flags to JSON string
      */
     private fun flagsToJson(flags: Set<DocumentFlag>): String {
-        try {
+        return try {
             val flagsObj = JSONObject()
             flagsObj.put("deleted", flags.contains(DocumentFlag.DELETED))
             flagsObj.put("accessRemoved", flags.contains(DocumentFlag.ACCESS_REMOVED))
-            return flagsObj.toString()
+            flagsObj.toString()
         } catch (e: Exception) {
             Log.e(TAG, "Failed to serialize flags: ${e.message}")
-            return "{\"deleted\":false,\"accessRemoved\":false}"
+            "{\"deleted\":false,\"accessRemoved\":false}"
         }
     }
     
     /**
-     * Escape JSON string for safe inclusion in JavaScript
+     * Escape JSON string for JavaScript
      */
     private fun escapeJsonForJs(json: String): String {
         return json
@@ -139,20 +154,13 @@ object JavaScriptFilterEvaluator {
     }
     
     /**
-     * Create a ReplicationFilter from a JavaScript function string
+     * Create replication filter
      */
     fun createFilter(functionString: String?): com.couchbase.lite.ReplicationFilter? {
-        if (functionString.isNullOrEmpty()) {
-            return null
-        }
+        if (functionString.isNullOrEmpty()) return null
         
         return com.couchbase.lite.ReplicationFilter { document, flags ->
-            try {
-                evaluateFilter(functionString, document, flags)
-            } catch (e: Exception) {
-                Log.e(TAG, "Error in replication filter: ${e.message}", e)
-                false // Default to not replicating on error
-            }
+            evaluateFilter(functionString, document, flags)
         }
     }
 }
