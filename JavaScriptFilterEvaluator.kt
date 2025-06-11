@@ -4,7 +4,7 @@ import android.util.Log
 import com.couchbase.lite.Document
 import com.couchbase.lite.DocumentFlag
 import com.eclipsesource.v8.V8
-import org.json.JSONObject
+import com.eclipsesource.v8.V8Object
 
 object JavaScriptFilterEvaluator {
     private const val TAG = "JSFilterEvaluator"
@@ -59,27 +59,25 @@ object JavaScriptFilterEvaluator {
             
             val compiledFunction = getCompiledFunction(runtime, filterFunction)
             
-            // Convert to JSON
-            val docJson = documentToJson(document)
-            val flagsJson = flagsToJson(flags)
+            // Create V8 objects from document and flags
+            val docObj = createDocumentObject(v8, document)
+            val flagsObj = createFlagsObject(v8, flags)
             
-            // Escape JSON for JavaScript
-            val escapedDocJson = escapeJsonForJs(docJson)
-            val escapedFlagsJson = escapeJsonForJs(flagsJson)
-            
-            // Execute with JSON parsing
-            val script = """
-                (function() {
-                    var doc = JSON.parse('$escapedDocJson');
-                    var flags = JSON.parse('$escapedFlagsJson');
-                    return ($compiledFunction)(doc, flags);
-                })()
-            """.trimIndent()
-            
-            val result = v8.executeScript(script)
-            when (result) {
-                is Boolean -> result
-                else -> false
+            try {
+                v8.add("doc", docObj)
+                v8.add("flags", flagsObj)
+                
+                val script = "($compiledFunction)(doc, flags)"
+                val result = v8.executeScript(script)
+                
+                when (result) {
+                    is Boolean -> result
+                    else -> false
+                }
+            } finally {
+                docObj.release()
+                flagsObj.release()
+                v8.executeScript("delete doc; delete flags;")
             }
         } catch (e: Exception) {
             Log.e(TAG, "Filter evaluation error: ${e.message}")
@@ -113,44 +111,65 @@ object JavaScriptFilterEvaluator {
     }
     
     /**
-     * Convert document to JSON string
+     * Create V8 object from document
      */
-    private fun documentToJson(document: Document): String {
-        return try {
+     private fun createDocumentObject(v8: V8, document: Document): V8Object {
+        val obj = V8Object(v8)
+        
+        try {
             val docMap = document.toMap().toMutableMap()
             docMap["_id"] = document.id
-            JSONObject(docMap).toString()
+            
+            // Add properties directly to V8 object
+            for ((key, value) in docMap) {
+                addValueToV8Object(obj, key, value)
+            }
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to serialize document: ${e.message}")
-            "{\"_id\":\"${document.id}\"}"
+            Log.w(TAG, "Document conversion warning: ${e.message}")
+            obj.add("_id", document.id)
+        }
+        
+        return obj
+    }
+
+    /**
+     * Add values to V8 object with type checking
+     */
+    private fun addValueToV8Object(obj: V8Object, key: String, value: Any?) {
+        when (value) {
+            is String -> obj.add(key, value)
+            is Int -> obj.add(key, value)
+            is Long -> obj.add(key, value.toInt())
+            is Double -> obj.add(key, value)
+            is Float -> obj.add(key, value.toDouble())
+            is Boolean -> obj.add(key, value)
+            is Map<*, *> -> {
+                val nestedObj = V8Object(obj.runtime)
+                for ((nestedKey, nestedValue) in value) {
+                    if (nestedKey is String) {
+                        addValueToV8Object(nestedObj, nestedKey, nestedValue)
+                    }
+                }
+                obj.add(key, nestedObj)
+                nestedObj.release()
+            }
+            is List<*> -> {
+                obj.add(key, value.toString())
+            }
+            null -> obj.addNull(key)
+            else -> obj.add(key, value.toString())
         }
     }
+
     
     /**
-     * Convert flags to JSON string
+     * Create V8 object from flags
      */
-    private fun flagsToJson(flags: Set<DocumentFlag>): String {
-        return try {
-            val flagsObj = JSONObject()
-            flagsObj.put("deleted", flags.contains(DocumentFlag.DELETED))
-            flagsObj.put("accessRemoved", flags.contains(DocumentFlag.ACCESS_REMOVED))
-            flagsObj.toString()
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to serialize flags: ${e.message}")
-            "{\"deleted\":false,\"accessRemoved\":false}"
-        }
-    }
-    
-    /**
-     * Escape JSON string for JavaScript
-     */
-    private fun escapeJsonForJs(json: String): String {
-        return json
-            .replace("\\", "\\\\")
-            .replace("'", "\\'")
-            .replace("\n", "\\n")
-            .replace("\r", "\\r")
-            .replace("\t", "\\t")
+    private fun createFlagsObject(v8: V8, flags: Set<DocumentFlag>): V8Object {
+        val obj = V8Object(v8)
+        obj.add("deleted", flags.contains(DocumentFlag.DELETED))
+        obj.add("accessRemoved", flags.contains(DocumentFlag.ACCESS_REMOVED))
+        return obj
     }
     
     /**
@@ -161,6 +180,21 @@ object JavaScriptFilterEvaluator {
         
         return com.couchbase.lite.ReplicationFilter { document, flags ->
             evaluateFilter(functionString, document, flags)
+        }
+    }
+
+    /**
+     * Cleanup method - call when appropriate (e.g., app shutdown)
+     */
+    fun cleanup() {
+        try {
+            val runtime = threadLocalV8.get()
+            if (runtime != null && !runtime.v8.isReleased) {
+                runtime.v8.close()
+                threadLocalV8.remove()
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Cleanup V8 warning: ${e.message}")
         }
     }
 }
