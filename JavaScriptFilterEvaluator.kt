@@ -188,7 +188,6 @@ object JavaScriptFilterEvaluator {
                     }
                 }
                 obj.add(key, nestedObj)
-                nestedObj.release()
             }
             is List<*> -> {
                 val v8Array = V8Array(obj.runtime)
