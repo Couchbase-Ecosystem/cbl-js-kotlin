@@ -161,7 +161,11 @@ object JavaScriptFilterEvaluator {
             }
         } catch (e: Exception) {
             Log.w(TAG, "Document conversion warning: ${e.message}")
-            obj.add("_id", document.id)
+            resources.release()
+
+            val fallback = V8Object(v8)
+            fallback.add("_id", document.id)
+            return fallback
         }
 
         return obj
@@ -174,7 +178,7 @@ object JavaScriptFilterEvaluator {
         when (value) {
             is String -> obj.add(key, value)
             is Int -> obj.add(key, value)
-            is Long -> obj.add(key, value.toInt())
+            is Long -> obj.add(key, value.toDouble()) // Convert Long to Double to match JavaScript Number type (safe up to ±2^53)
             is Double -> obj.add(key, value)
             is Float -> obj.add(key, value.toDouble())
             is Boolean -> obj.add(key, value)
