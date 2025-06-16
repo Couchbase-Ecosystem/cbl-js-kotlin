@@ -9,6 +9,7 @@ object ReplicatorManager {
     private val replicators: MutableMap<String, Replicator> = mutableMapOf()
 
     fun cleanUp(replicatorId: String) {
+        JavaScriptFilterEvaluator.cleanup()
         val replicator = replicators[replicatorId]
         if (replicator != null) {
             replicator.stop()

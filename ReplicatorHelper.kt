@@ -129,7 +129,7 @@ object ReplicatorHelper {
                     collections.add(collection)
                 }
                 
-                // Process config (channels & documentIds)
+                // Process config (channels, documentIds, and push filter)
                 val collectionConfig = CollectionConfiguration()
                 val configData = collectionConfigItem.optJSONObject("config")
                 
@@ -155,6 +155,17 @@ object ReplicatorHelper {
                         }
                         if (documentIds.isNotEmpty()) {
                             collectionConfig.documentIDs = documentIds
+                        }
+                    }
+                    
+                    // Process push filter
+                    if (configData.has("pushFilter")) {
+                        val pushFilterStr = configData.optString("pushFilter")
+                        if (!pushFilterStr.isNullOrEmpty()) {
+                            val pushFilter = JavaScriptFilterEvaluator.createFilter(pushFilterStr)
+                            if (pushFilter != null) {
+                                collectionConfig.pushFilter = pushFilter
+                            }
                         }
                     }
                 }
