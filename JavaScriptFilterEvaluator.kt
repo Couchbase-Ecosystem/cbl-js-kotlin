@@ -95,11 +95,11 @@ object JavaScriptFilterEvaluator {
 
             // Create V8 objects from document and flags
             val docObj = createDocumentObject(v8, document, resources)
-            val flagsObj = createFlagsObject(v8, flags)
+            val flagsArray = createFlagsArray(v8, flags)
 
             try {
                 v8.add("doc", docObj)
-                v8.add("flags", flagsObj)
+                v8.add("flags", flagsArray)
 
                 val script = "($compiledFunction)(doc, flags)"
                 val result = v8.executeScript(script)
@@ -125,6 +125,10 @@ object JavaScriptFilterEvaluator {
                 val wrapped = """
                     function(doc, flags) {
                         try {
+                            const ReplicatedDocumentFlag = {
+                                DELETED: 'DELETED',
+                                ACCESS_REMOVED: 'ACCESS_REMOVED'
+                            };
                             var filterFunc = $filterFunction;
                             return !!filterFunc(doc, flags);
                         } catch (e) {
@@ -153,7 +157,7 @@ object JavaScriptFilterEvaluator {
 
         try {
             val docMap = document.toMap().toMutableMap()
-            docMap["_id"] = document.id
+            docMap["id"] = document.id
 
             // Add properties directly to V8 object
             for ((key, value) in docMap) {
@@ -221,13 +225,21 @@ object JavaScriptFilterEvaluator {
 
 
     /**
-     * Create V8 object from flags
+     * Create V8 array from flags
      */
-    private fun createFlagsObject(v8: V8, flags: Set<DocumentFlag>): V8Object {
-        val obj = V8Object(v8)
-        obj.add("deleted", flags.contains(DocumentFlag.DELETED))
-        obj.add("accessRemoved", flags.contains(DocumentFlag.ACCESS_REMOVED))
-        return obj
+    private fun createFlagsArray(v8: V8, flags: Set<DocumentFlag>): V8Array {
+        val array = V8Array(v8)
+        
+        mapOf(
+            DocumentFlag.DELETED to "DELETED",
+            DocumentFlag.ACCESS_REMOVED to "ACCESS_REMOVED"
+        ).forEach { (flag, name) ->
+            if (flags.contains(flag)) {
+                array.push(name)
+            }
+        }
+        
+        return array
     }
 
     /**
