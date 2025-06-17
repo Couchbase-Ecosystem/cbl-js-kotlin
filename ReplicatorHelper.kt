@@ -158,13 +158,23 @@ object ReplicatorHelper {
                         }
                     }
                     
-                    // Process push filter
+                    // Process push and pull filters
                     if (configData.has("pushFilter")) {
                         val pushFilterStr = configData.optString("pushFilter")
                         if (!pushFilterStr.isNullOrEmpty()) {
                             val pushFilter = JavaScriptFilterEvaluator.createFilter(pushFilterStr)
                             if (pushFilter != null) {
                                 collectionConfig.pushFilter = pushFilter
+                            }
+                        }
+                    }
+
+                    if (configData.has("pullFilter")) {
+                        val pullFilterStr = configData.optString("pullFilter")
+                        if (!pullFilterStr.isNullOrEmpty()) {
+                            val pullFilter = JavaScriptFilterEvaluator.createFilter(pullFilterStr)
+                            if (pullFilter != null) {
+                                collectionConfig.pullFilter = pullFilter
                             }
                         }
                     }
