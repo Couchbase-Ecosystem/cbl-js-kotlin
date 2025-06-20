@@ -165,7 +165,7 @@ object JavaScriptFilterEvaluator {
             }
         } catch (e: Exception) {
             Log.w(TAG, "Document conversion warning: ${e.message}")
-            obj.add("_id", document.id)
+            obj.add("id", document.id)
         }
 
         return obj
