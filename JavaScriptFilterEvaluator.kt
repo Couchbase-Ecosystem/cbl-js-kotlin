@@ -165,7 +165,11 @@ object JavaScriptFilterEvaluator {
             }
         } catch (e: Exception) {
             Log.w(TAG, "Document conversion warning: ${e.message}")
-            obj.add("id", document.id)
+            resources.release()
+
+            val fallback = V8Object(v8)
+            fallback.add("id", document.id)
+            return fallback
         }
 
         return obj
