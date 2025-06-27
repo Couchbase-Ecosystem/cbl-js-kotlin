@@ -6,6 +6,7 @@ import kotlin.random.Random
 
 import org.json.JSONObject
 import java.io.File
+import com.cblreactnative.CouchbaseReflectionHelper
 typealias CBLCollection = com.couchbase.lite.Collection
 
 
@@ -30,7 +31,7 @@ object DatabaseManager {
             if (jsonConfig.has("encryptionKey")) {
                 val encryptionKey = jsonConfig.getString("encryptionKey")
                 if (encryptionKey.isNotEmpty()) {
-                    databaseConfig.setEncryptionKey(EncryptionKey(encryptionKey))
+                    CouchbaseReflectionHelper.setEncryptionKey(databaseConfig, encryptionKey)
                 }
             }
         }
@@ -40,11 +41,10 @@ object DatabaseManager {
     fun changeEncryptionKey(databaseName: String, encryptionKey: String?) {
         val db = getDatabase(databaseName) ?: throw Exception("Error: Database not found.")
         if (encryptionKey == null) {
-            db.changeEncryptionKey(null)
+            CouchbaseReflectionHelper.changeEncryptionKey(db, null)
             return
         }
-        val encryptionKeyValue = EncryptionKey(encryptionKey)
-        db.changeEncryptionKey(encryptionKeyValue)
+        CouchbaseReflectionHelper.changeEncryptionKey(db, encryptionKey)
     }
 
     fun closeDatabase(databaseName: String) {
