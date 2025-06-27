@@ -12,6 +12,7 @@ import org.json.JSONException
 import org.json.JSONObject
 import java.net.URI
 import java.net.URISyntaxException
+import com.cblreactnative.CouchbaseReflectionHelper
 import com.couchbase.lite.Collection as CBLCollection
 
 object ReplicatorHelper {
@@ -42,7 +43,7 @@ object ReplicatorHelper {
             
             // Set other properties
             try {
-                replicatorConfig.isAcceptOnlySelfSignedServerCertificate = config.getBoolean("acceptSelfSignedCerts")
+                CouchbaseReflectionHelper.setAcceptOnlySelfSignedServerCertificate(replicatorConfig, config.getBoolean("acceptSelfSignedCerts"))
             } catch (e: Exception) {
                 Log.d(TAG, "Could not set acceptSelfSignedCerts: ${e.message}")
             }
