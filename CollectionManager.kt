@@ -82,6 +82,16 @@ object CollectionManager {
     }
 
     @Throws(Exception::class)
+    fun fullName(
+        collectionName: String,
+        scopeName: String,
+        databaseName: String
+    ): String {
+        val col = this.getCollection(collectionName, scopeName, databaseName)
+        return col?.fullName ?: throw Exception("Collection not found: $collectionName in scope: $scopeName")
+    }
+
+    @Throws(Exception::class)
     fun getBlobContent(key: String,
                        documentId: String,
                        collectionName: String,
