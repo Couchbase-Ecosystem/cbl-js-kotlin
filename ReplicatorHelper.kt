@@ -27,132 +27,128 @@ object ReplicatorHelper {
      */
     @Throws(Exception::class)
     fun replicatorConfigFromJson(config: ReadableMap): ReplicatorConfiguration {
-        try {
-            // STEP 1: Parse and validate required fields (same as iOS)
-            val targetConfig = config.getMap("target")
-                ?: throw Exception("Target configuration is required")
-            val urlString = targetConfig.getString("url")
-                ?: throw Exception("Target URL is required")
-            
-            val replicatorTypeStr = config.getString("replicatorType") ?: "PUSH_AND_PULL"
-            val replicatorType = getReplicatorTypeFromString(replicatorTypeStr)
-            val continuous = config.getBoolean("continuous")
-            
-            // STEP 2: Create endpoint (same as iOS)
-            val endpoint = URLEndpoint(URI(urlString))
-            
-            // STEP 3: Detect API format and process collections (similar to iOS)
-            val collectionConfigStr = config.getString("collectionConfig")
-            if (collectionConfigStr.isNullOrEmpty()) {
-                throw Exception("Collection configuration is required")
-            }
-            
-            // Detect API format (same logic as iOS line 248-249)
-            val jsonArray = JSONArray(collectionConfigStr)
-            if (jsonArray.length() == 0) {
-                throw Exception("At least one collection configuration is required")
-            }
-            
-            val firstItem = jsonArray.getJSONObject(0)
-            val isNewApi = firstItem.has("collection")   // NEW API has "collection" key
-            val isOldApi = firstItem.has("collections")  // OLD API has "collections" key
-            
-            // Create ReplicatorConfiguration with endpoint
-            val replicatorConfig = ReplicatorConfiguration(endpoint)
-            
-            // Process collections based on detected format
-            if (isNewApi) {
-                // NEW API: Build collection configs and add individually (like iOS line 252-255)
-                val collectionConfigs = buildCollectionConfigurationsFromJson(collectionConfigStr)
-                
-                // Add each collection individually with its specific config (like iOS)
-                for ((collection, colConfig) in collectionConfigs) {
-                    replicatorConfig.addCollection(collection, colConfig)
-                }
-            } else if (isOldApi) {
-                // OLD API: Use bulk add method (like iOS line 256-259)
-                processCollectionConfigOldApi(collectionConfigStr, replicatorConfig)
-            } else {
-                throw Exception("Unrecognized collection configuration format")
-            }
-            
-            // STEP 4: Set replicator type and continuous (same as iOS line 323-332)
-            replicatorConfig.type = replicatorType
-            replicatorConfig.isContinuous = continuous
-            
-            // STEP 5: Set boolean properties (same as iOS line 336-342)
-            try {
-                replicatorConfig.isAcceptOnlySelfSignedServerCertificate = config.getBoolean("acceptSelfSignedCerts")
-            } catch (e: Exception) {
-                // acceptSelfSignedCerts not provided or invalid
-            }
-            
-            // Note: acceptParentDomainCookies is not available in Android Couchbase Lite SDK
-            // The property exists in iOS but not in Android. This is a known platform difference.
-            
-            // Note: allowReplicationInBackground is not available in Android Couchbase Lite SDK
-            // The property exists in iOS but not in Android. This is a known platform difference.
-            
-            try {
-                if (config.hasKey("autoPurgeEnabled")) {
-                    replicatorConfig.isAutoPurgeEnabled = config.getBoolean("autoPurgeEnabled")
-                }
-            } catch (e: Exception) {
-                // autoPurgeEnabled not provided or invalid
-            }
-            
-            // STEP 6: Set numeric properties (same as iOS line 346-350)
-            try {
-                replicatorConfig.heartbeat = config.getDouble("heartbeat").toInt()
-                replicatorConfig.maxAttempts = config.getInt("maxAttempts")
-                replicatorConfig.maxAttemptWaitTime = config.getDouble("maxAttemptWaitTime").toInt()
-            } catch (e: Exception) {
-                // Numeric properties not provided or invalid
-            }
-            
-            // STEP 7: Set pinned server certificate (same as iOS line 354-364)
-            try {
-                if (config.hasKey("pinnedServerCertificate")) {
-                    val certString = config.getString("pinnedServerCertificate")
-                    if (!certString.isNullOrEmpty()) {
-                        // Android doesn't support pinned certificates the same way as iOS
-                        // This would need to be implemented using TrustManager if required
-                    }
-                }
-            } catch (e: Exception) {
-                // pinnedServerCertificate not provided or invalid
-            }
-            
-            // STEP 8: Set headers (same as iOS line 368-372)
-            if (config.hasKey("headers") && config.getType("headers") == ReadableType.Map) {
-                val headers = config.getMap("headers")
-                val headerMap = HashMap<String, String>()
-                headers?.entryIterator?.forEach { entry ->
-                    if (entry.value is String) {
-                        headerMap[entry.key] = entry.value as String
-                    }
-                }
-                if (headerMap.isNotEmpty()) {
-                    replicatorConfig.headers = headerMap
-                }
-            }
-            
-            // STEP 9: Set authenticator (same as iOS line 376-385)
-            if (config.hasKey("authenticator") && config.getType("authenticator") == ReadableType.Map) {
-                val authConfig = config.getMap("authenticator")
-                if (authConfig != null) {
-                    val authenticator = createAuthenticator(authConfig)
-                    if (authenticator != null) {
-                        replicatorConfig.authenticator = authenticator
-                    }
-                }
-            }
-            
-            // STEP 10: Return fully configured ReplicatorConfiguration
-            return replicatorConfig
-        } catch (e: Exception) {
-            throw e
+        // STEP 1: Parse and validate required fields (same as iOS)
+        val targetConfig = config.getMap("target")
+            ?: throw Exception("Target configuration is required")
+        val urlString = targetConfig.getString("url")
+            ?: throw Exception("Target URL is required")
+        
+        val replicatorTypeStr = config.getString("replicatorType") ?: "PUSH_AND_PULL"
+        val replicatorType = getReplicatorTypeFromString(replicatorTypeStr)
+        val continuous = config.getBoolean("continuous")
+        
+        // STEP 2: Create endpoint (same as iOS)
+        val endpoint = URLEndpoint(URI(urlString))
+        
+        // STEP 3: Detect API format and process collections (similar to iOS)
+        val collectionConfigStr = config.getString("collectionConfig")
+        if (collectionConfigStr.isNullOrEmpty()) {
+            throw Exception("Collection configuration is required")
         }
+        
+        // Detect API format (same logic as iOS line 248-249)
+        val jsonArray = JSONArray(collectionConfigStr)
+        if (jsonArray.length() == 0) {
+            throw Exception("At least one collection configuration is required")
+        }
+        
+        val firstItem = jsonArray.getJSONObject(0)
+        val isNewApi = firstItem.has("collection")   // NEW API has "collection" key
+        val isOldApi = firstItem.has("collections")  // OLD API has "collections" key
+        
+        // Create ReplicatorConfiguration with endpoint
+        val replicatorConfig = ReplicatorConfiguration(endpoint)
+        
+        // Process collections based on detected format
+        if (isNewApi) {
+            // NEW API: Build collection configs and add individually (like iOS line 252-255)
+            val collectionConfigs = buildCollectionConfigurationsFromJson(collectionConfigStr)
+            
+            // Add each collection individually with its specific config (like iOS)
+            for ((collection, colConfig) in collectionConfigs) {
+                replicatorConfig.addCollection(collection, colConfig)
+            }
+        } else if (isOldApi) {
+            // OLD API: Use bulk add method (like iOS line 256-259)
+            processCollectionConfigOldApi(collectionConfigStr, replicatorConfig)
+        } else {
+            throw Exception("Unrecognized collection configuration format")
+        }
+        
+        // STEP 4: Set replicator type and continuous (same as iOS line 323-332)
+        replicatorConfig.type = replicatorType
+        replicatorConfig.isContinuous = continuous
+        
+        // STEP 5: Set boolean properties (same as iOS line 336-342)
+        try {
+            replicatorConfig.isAcceptOnlySelfSignedServerCertificate = config.getBoolean("acceptSelfSignedCerts")
+        } catch (e: Exception) {
+            // acceptSelfSignedCerts not provided or invalid
+        }
+        
+        // Note: acceptParentDomainCookies is not available in Android Couchbase Lite SDK
+        // The property exists in iOS but not in Android. This is a known platform difference.
+        
+        // Note: allowReplicationInBackground is not available in Android Couchbase Lite SDK
+        // The property exists in iOS but not in Android. This is a known platform difference.
+        
+        try {
+            if (config.hasKey("autoPurgeEnabled")) {
+                replicatorConfig.isAutoPurgeEnabled = config.getBoolean("autoPurgeEnabled")
+            }
+        } catch (e: Exception) {
+            // autoPurgeEnabled not provided or invalid
+        }
+        
+        // STEP 6: Set numeric properties (same as iOS line 346-350)
+        try {
+            replicatorConfig.heartbeat = config.getDouble("heartbeat").toInt()
+            replicatorConfig.maxAttempts = config.getInt("maxAttempts")
+            replicatorConfig.maxAttemptWaitTime = config.getDouble("maxAttemptWaitTime").toInt()
+        } catch (e: Exception) {
+            // Numeric properties not provided or invalid
+        }
+        
+        // STEP 7: Set pinned server certificate (same as iOS line 354-364)
+        try {
+            if (config.hasKey("pinnedServerCertificate")) {
+                val certString = config.getString("pinnedServerCertificate")
+                if (!certString.isNullOrEmpty()) {
+                    // Android doesn't support pinned certificates the same way as iOS
+                    // This would need to be implemented using TrustManager if required
+                }
+            }
+        } catch (e: Exception) {
+            // pinnedServerCertificate not provided or invalid
+        }
+        
+        // STEP 8: Set headers (same as iOS line 368-372)
+        if (config.hasKey("headers") && config.getType("headers") == ReadableType.Map) {
+            val headers = config.getMap("headers")
+            val headerMap = HashMap<String, String>()
+            headers?.entryIterator?.forEach { entry ->
+                if (entry.value is String) {
+                    headerMap[entry.key] = entry.value as String
+                }
+            }
+            if (headerMap.isNotEmpty()) {
+                replicatorConfig.headers = headerMap
+            }
+        }
+        
+        // STEP 9: Set authenticator (same as iOS line 376-385)
+        if (config.hasKey("authenticator") && config.getType("authenticator") == ReadableType.Map) {
+            val authConfig = config.getMap("authenticator")
+            if (authConfig != null) {
+                val authenticator = createAuthenticator(authConfig)
+                if (authenticator != null) {
+                    replicatorConfig.authenticator = authenticator
+                }
+            }
+        }
+        
+        // STEP 10: Return fully configured ReplicatorConfiguration
+        return replicatorConfig
     }
     
     /**
@@ -249,8 +245,6 @@ object ReplicatorHelper {
             
         } catch (e: JSONException) {
             throw Exception("Invalid NEW API collection configuration format: ${e.message}")
-        } catch (e: Exception) {
-            throw e
         }
     }
     
@@ -356,8 +350,6 @@ object ReplicatorHelper {
             }
         } catch (e: JSONException) {
             throw Exception("Invalid OLD API collection configuration format: ${e.message}")
-        } catch (e: Exception) {
-            throw e
         }
     }
     
