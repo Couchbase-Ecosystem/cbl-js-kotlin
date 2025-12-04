@@ -1,12 +1,11 @@
-package cbl.js.kotiln
+package cbl.js.kotlin
 
-import com.couchbase.lite.ConsoleLogSink
-import com.couchbase.lite.CustomLogSink
-import com.couchbase.lite.FileLogSink
 import com.couchbase.lite.LogDomain
 import com.couchbase.lite.LogLevel
-import com.couchbase.lite.LogSinkProtocol
-import com.couchbase.lite.LogSinks
+import com.couchbase.lite.logging.BaseLogSink
+import com.couchbase.lite.logging.ConsoleLogSink
+import com.couchbase.lite.logging.FileLogSink
+import com.couchbase.lite.logging.LogSinks
 
 /**
  * LogSinksManager - Manages the three log sinks (Console, File, Custom) for Couchbase Lite
@@ -60,9 +59,7 @@ object LogSinksManager {
         }
 
         val directory = config["directory"] as? String
-            ?: throw IllegalArgumentException("Directory is required and cannot be empty")
-
-        if (directory.isEmpty()) {
+        if (directory.isNullOrEmpty()) {
             throw IllegalArgumentException("Directory is required and cannot be empty")
         }
 
@@ -71,18 +68,21 @@ object LogSinksManager {
         // Clean the directory path (remove file:// prefix if present)
         val cleanDir = directory.replace("file://", "")
 
-        // Use provided values or defaults
         val usePlaintext = config["usePlaintext"] as? Boolean ?: false
-        val maxFileSize = (config["maxFileSize"] as? Number)?.toLong() ?: 524288L // 512 KB default
-        val maxKeptFiles = (config["maxKeptFiles"] as? Number)?.toInt() ?: 2 // default
+        // Only pass maxFileSize/maxKeptFiles if user provides them; CBL handles defaults internally
+        val maxFileSize = (config["maxFileSize"] as? Number)?.toLong()
+        val maxKeptFiles = (config["maxKeptFiles"] as? Number)?.toInt()
 
-        LogSinks.get().file = FileLogSink(
-            logLevel,
-            cleanDir,
-            usePlaintext,
-            maxKeptFiles,
-            maxFileSize
-        )
+        // Use Builder pattern to create FileLogSink
+        val builder = FileLogSink.Builder()
+            .setDirectory(cleanDir)
+            .setLevel(logLevel)
+        
+        // TODO: Add usePlaintext when we find the correct method name
+        maxFileSize?.let { builder.setMaxFileSize(it) }
+        maxKeptFiles?.let { builder.setMaxKeptFiles(it) }
+        
+        LogSinks.get().file = builder.build()
     }
 
     // ============================================================
@@ -111,14 +111,14 @@ object LogSinksManager {
         val logLevel = convertLogLevel(level)
         val logDomains = convertLogDomains(domains)
 
-        // Create a custom logger that implements LogSinkProtocol
-        val customLogger = object : LogSinkProtocol {
-            override fun log(level: LogLevel, domain: LogDomain, message: String) {
+        // Create a custom logger that extends BaseLogSink
+        val customLogger = object : BaseLogSink(logLevel, logDomains) {
+            override fun writeLog(level: LogLevel, domain: LogDomain, message: String) {
                 callback(level, domain, message)
             }
         }
 
-        LogSinks.get().custom = CustomLogSink(logLevel, logDomains, customLogger)
+        LogSinks.get().custom = customLogger
     }
 
     // ============================================================
@@ -148,7 +148,7 @@ object LogSinksManager {
     private fun convertLogDomains(domains: List<String>): Set<LogDomain> {
         // Empty list or "ALL" means all domains
         if (domains.isEmpty() || domains.any { it.uppercase() == "ALL" }) {
-            return LogDomain.ALL_DOMAINS
+            return LogDomain.ALL
         }
 
         val result = mutableSetOf<LogDomain>()
