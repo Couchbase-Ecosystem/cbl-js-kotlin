@@ -1,4 +1,4 @@
-package cbl.js.kotiln
+package cbl.js.kotlin
 
 import android.util.Log
 import com.couchbase.lite.Document

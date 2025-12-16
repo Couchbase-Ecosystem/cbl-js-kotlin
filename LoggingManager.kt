@@ -1,4 +1,4 @@
-package cbl.js.kotiln
+package cbl.js.kotlin
 
 import com.couchbase.lite.*
 import java.util.EnumSet

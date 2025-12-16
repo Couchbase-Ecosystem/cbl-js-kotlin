@@ -1,4 +1,4 @@
-package cbl.js.kotiln
+package cbl.js.kotlin
 
 import cbl.js.kotlin.CollectionDocumentResult
 import com.couchbase.lite.ConcurrencyControl

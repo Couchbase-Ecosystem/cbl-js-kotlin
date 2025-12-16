@@ -1,4 +1,4 @@
-package cbl.js.kotiln
+package cbl.js.kotlin
 import android.content.Context
 import com.couchbase.lite.*
 import com.couchbase.lite.Collection
